@@ -8,6 +8,9 @@ Usage:
     # Test Pi3 tool
     python test/test_tool.py --tool pi3 --image assets/dog.jpeg --azimuth 45 --elevation -30
 
+    # Test Pi3X tool (upgraded version with smoother point clouds)
+    python test/test_tool.py --tool pi3x --image assets/dog.jpeg --azimuth 45 --elevation -30
+
     # Test Pi3 with camera view mode
     python test/test_tool.py --tool pi3 --image assets/dog.jpeg --azimuth 90 --elevation 0 --camera_view
 
@@ -131,6 +134,93 @@ def test_pi3(
 
 
 # ============================================================
+# Pi3X Tool Test
+# ============================================================
+
+def test_pi3x(
+    image_paths: List[str],
+    azimuth_angle: float = 45,
+    elevation_angle: float = 0,
+    server_url: str = "http://localhost:20031",
+    rotation_reference_camera: int = 1,
+    camera_view: bool = False,
+    output_dir: str = "outputs/tool_test",
+) -> Optional[str]:
+    """
+    Directly test Pi3X 3D reconstruction tool (upgraded version with smoother point clouds).
+
+    Args:
+        image_paths: List of input image paths.
+        azimuth_angle: Horizontal rotation angle (-180 ~ 180).
+        elevation_angle: Vertical rotation angle (-90 ~ 90).
+        server_url: Pi3X server URL.
+        rotation_reference_camera: Reference camera index (1-based).
+        camera_view: If True, use first-person camera perspective.
+        output_dir: Directory to save the rendered output image.
+
+    Returns:
+        Path to the saved output image, or None on failure.
+    """
+    from spagent.tools import Pi3XTool
+
+    # --- validate inputs ---
+    for p in image_paths:
+        if not os.path.exists(p):
+            logger.error(f"Image not found: {p}")
+            return None
+
+    logger.info("=" * 60)
+    logger.info("Pi3X Tool Test")
+    logger.info("=" * 60)
+    logger.info(f"  Input images     : {image_paths}")
+    logger.info(f"  Azimuth angle    : {azimuth_angle}°")
+    logger.info(f"  Elevation angle  : {elevation_angle}°")
+    logger.info(f"  Server URL       : {server_url}")
+    logger.info(f"  Ref camera       : {rotation_reference_camera}")
+    logger.info(f"  Camera view      : {camera_view}")
+    logger.info(f"  Output dir       : {output_dir}")
+    logger.info("-" * 60)
+
+    # --- create tool (real mode, no mock) ---
+    tool = Pi3XTool(
+        use_mock=False,
+        server_url=server_url,
+        mode="inference",
+    )
+
+    # --- call ---
+    result = tool.call(
+        image_path=image_paths,
+        azimuth_angle=azimuth_angle,
+        elevation_angle=elevation_angle,
+        rotation_reference_camera=rotation_reference_camera,
+        camera_view=camera_view,
+    )
+
+    # --- handle result ---
+    if not result.get("success"):
+        logger.error(f"Pi3X tool failed: {result.get('error', 'unknown error')}")
+        return None
+
+    logger.info("Pi3X reconstruction succeeded!")
+    logger.info(f"  Points count : {result.get('points_count', 'N/A')}")
+    logger.info(f"  View count   : {result.get('view_count', 'N/A')}")
+    logger.info(f"  PLY file     : {result.get('ply_filename', 'N/A')}")
+
+    src_path = result.get("output_path")
+    if src_path and os.path.exists(src_path):
+        os.makedirs(output_dir, exist_ok=True)
+        import shutil
+        dst_path = os.path.join(output_dir, os.path.basename(src_path))
+        shutil.copy2(src_path, dst_path)
+        logger.info(f"  Output saved : {dst_path}")
+        return dst_path
+    else:
+        logger.warning("No output image path in result.")
+        return None
+
+
+# ============================================================
 # Depth Tool Test  (placeholder for future)
 # ============================================================
 
@@ -192,7 +282,7 @@ def parse_args():
         "--tool",
         type=str,
         required=True,
-        choices=["pi3", "depth", "segmentation", "detection"],
+        choices=["pi3", "pi3x", "depth", "segmentation", "detection"],
         help="Which tool to test.",
     )
     parser.add_argument(
@@ -259,6 +349,18 @@ def main():
     if args.tool == "pi3":
         server = args.server_url or "http://localhost:20030"
         result_path = test_pi3(
+            image_paths=args.image,
+            azimuth_angle=args.azimuth,
+            elevation_angle=args.elevation,
+            server_url=server,
+            rotation_reference_camera=args.ref_camera,
+            camera_view=args.camera_view,
+            output_dir=args.output_dir,
+        )
+
+    elif args.tool == "pi3x":
+        server = args.server_url or "http://localhost:20031"
+        result_path = test_pi3x(
             image_paths=args.image,
             azimuth_angle=args.azimuth,
             elevation_angle=args.elevation,

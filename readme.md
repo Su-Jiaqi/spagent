@@ -57,9 +57,9 @@ We introduce **SPAgent**, a spatial intelligence agent designed to operate in th
 | Module | Path | Description |
 |--------|------|-------------|
 | **SPAgent Core** | `spagent/core/` | Core agent architecture:<br>- SPAgent class and agent logic<br>- Tool base classes and registry<br>- Model base classes and wrappers<br>- Unified prompt system<br>- Data collection utilities |
-| **Tools** | `spagent/tools/` | Modular expert tool implementations:<br>- DepthEstimationTool<br>- SegmentationTool<br>- ObjectDetectionTool<br>- SupervisionTool<br>- YOLOETool<br>- MoondreamTool<br>- Pi3Tool |
+| **Tools** | `spagent/tools/` | Modular expert tool implementations:<br>- DepthEstimationTool<br>- SegmentationTool<br>- ObjectDetectionTool<br>- SupervisionTool<br>- YOLOETool<br>- MoondreamTool<br>- Pi3Tool<br>- Pi3XTool |
 | **Models** | `spagent/models/` | Model wrappers for different backends:<br>- GPTModel (OpenAI API)<br>- QwenModel (DashScope API)<br>- QwenVLLMModel (local VLLM) |
-| **External Experts** | `spagent/external_experts/` | Specialized expert models with client/server architecture:<br>- Depth Estimation (**Depth-AnythingV2**)<br>- Image/Video Segmentation (**SAM2**)<br>- Open-vocabulary Detection (**GroundingDINO**)<br>- Vision Language Model (**Moondream**)<br>- 3D Point Cloud Reconstruction (**Pi3**)<br>- YOLO-E Detection & Annotation (**Supervision**)<br>- Each includes client/server implementations and can run as external APIs |
+| **External Experts** | `spagent/external_experts/` | Specialized expert models with client/server architecture:<br>- Depth Estimation (**Depth-AnythingV2**)<br>- Image/Video Segmentation (**SAM2**)<br>- Open-vocabulary Detection (**GroundingDINO**)<br>- Vision Language Model (**Moondream**)<br>- 3D Point Cloud Reconstruction (**Pi3** / **Pi3X**)<br>- YOLO-E Detection & Annotation (**Supervision**)<br>- Each includes client/server implementations and can run as external APIs |
 | **VLLM Models** | `spagent/vllm_models/` | VLLM inference utilities and wrappers:<br>- GPT API wrapper<br>- Qwen API wrapper<br>- Local VLLM inference for Qwen models |
 | **Examples** | `examples/` | Example scripts and usage tutorials:<br>- Evaluation scripts for datasets<br>- Quick start examples<br>- Tool definition examples |
 | **Test** | `test/` | Test scripts for tools and models:<br>- Direct tool testing without LLM Agent (`test_tool.py`)<br>- Pi3 tool testing with video frame extraction (`test_pi3_llm.py`)<br>- Integration tests |
@@ -73,7 +73,8 @@ We introduce **SPAgent**, a spatial intelligence agent designed to operate in th
 | **SAM2** | 2D | Image Segmentation | 20020 | Segment Anything Model 2nd generation, interactive or automatic segmentation |
 | **GroundingDINO** | 2D | Open-vocabulary Object Detection | 20022 | Detect arbitrary objects based on text descriptions |
 | **Moondream** | 2D | Vision Language Model | 20024 | Small and efficient visual Q&A model, supports image description and Q&A |
-| **Pi3** | 3D | 3D Point Cloud Reconstruction | 20030 | Generate 3D point clouds and multi-view rendered images from a single image |
+| **Pi3** | 3D | 3D Point Cloud Reconstruction | 20030 | Generate 3D point clouds and multi-view rendered images from images |
+| **Pi3X** | 3D | 3D Point Cloud Reconstruction (Enhanced) | 20031 | Upgraded Pi3 with smoother point clouds, metric scale, and optional multimodal conditioning |
 | **Supervision** | 2D | Object Detection Annotation | - | YOLO models and visualization tools, used for result visualization and post-processing |
 
 ## 🛠️ Installation & Setup
@@ -148,7 +149,8 @@ from spagent.tools import (
     SupervisionTool,          # Supervision tool
     YOLOETool,                # YOLO-E detection
     MoondreamTool,            # Visual Q&A
-    Pi3Tool                   # 3D reconstruction
+    Pi3Tool,                  # 3D reconstruction
+    Pi3XTool                  # 3D reconstruction (enhanced)
 )
 
 # Create full-featured agent
@@ -238,14 +240,17 @@ Use `test/test_tool.py` to directly test any external expert tool — no LLM or 
 # Test Pi3: input an image and render from a custom angle
 python test/test_tool.py --tool pi3 --image assets/dog.jpeg --azimuth 45 --elevation -30
 
-# Specify a custom Pi3 server address
+# Test Pi3X (enhanced version with smoother point clouds and metric scale)
+python test/test_tool.py --tool pi3x --image assets/dog.jpeg --azimuth 45 --elevation -30
+
+# Specify a custom server address
 python test/test_tool.py --tool pi3 --image assets/dog.jpeg --azimuth 45 --elevation -30 --server_url http://10.7.8.94:20030
 
 # Use first-person camera view mode
 python test/test_tool.py --tool pi3 --image assets/dog.jpeg --azimuth 90 --elevation 0 --camera_view
 
 # Multiple input images
-python test/test_tool.py --tool pi3 --image img1.jpg img2.jpg --azimuth 45 --elevation -30
+python test/test_tool.py --tool pi3x --image img1.jpg img2.jpg --azimuth 45 --elevation -30
 ```
 
 You can also call the test function directly in Python:

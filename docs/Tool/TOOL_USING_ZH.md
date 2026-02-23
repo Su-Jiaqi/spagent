@@ -11,11 +11,12 @@ external_experts/
 │   └──depth_anything
 │   └──grounding_dino
 │   └──pi3
+│   └──pi3x
 │   └──sam2
 ├── GroundingDINO/                  # 开放词汇目标检测
 ├── SAM2/                          # 图像和视频分割
 ├── Depth_AnythingV2/              # 深度估计
-├── Pi3/                           # 3D重建
+├── Pi3/                           # 3D重建 (Pi3 & Pi3X)
 ├── moondream/                     # 视觉语言模型
 └── supervision/                   # YOLO目标检测和标注工具
 ```
@@ -29,6 +30,7 @@ external_experts/
 | **GroundingDINO** | `ObjectDetectionTool` | 开放词汇目标检测 | 基于文本描述检测任意物体 | 20022 | `image_path`, `text_prompt`, `box_threshold`, `text_threshold` |
 | **Moondream** | `MoondreamTool` | 视觉语言模型 | 图像理解和问答，基于图像内容回答自然语言问题 | 20024 | `image_path`, `task`, `object_name` |
 | **Pi3** | `Pi3Tool` | 3D重建 | 从图像生成3D点云和多视角渲染图 | 20030 | `image_path`, `azimuth_angle`, `elevation_angle` |
+| **Pi3X** | `Pi3XTool` | 3D重建（增强版） | Pi3升级版，更平滑点云、近似度量尺度、可选多模态条件注入 | 20031 | `image_path`, `azimuth_angle`, `elevation_angle` |
 | **Supervision** | `SupervisionTool` | 目标检测标注 | YOLO模型和可视化工具，通用目标检测和分割 | - | `image_path`, `task` ("image_det" 或 "image_seg") |
 | **YOLO-E** | `YOLOETool` | YOLO-E检测 | 高精度检测，支持自定义类别 | - | `image_path`, `task`, `class_names` |
 
@@ -243,6 +245,46 @@ wget https://huggingface.co/yyfz233/Pi3/resolve/main/model.safetensors
 
 ---
 
+### 5.1 Pi3X - 增强版3D重建服务
+
+**功能**: 基于Pi3X模型的增强版3D重建（Pi3的升级版本）
+
+**特点**:
+- 更平滑的点云重建（ConvHead替代LinearPts3d，消除网格伪影）
+- 近似度量尺度重建（Metric Scale）
+- 可选多模态条件注入（相机位姿、内参、深度）
+- 更可靠的连续置信度评分
+- 与Pi3完全兼容的API接口（相同的输入/输出格式）
+
+**文件结构**:
+```
+Pi3/
+├── pi3/
+│   └── models/
+│       ├── pi3.py            # 原始Pi3模型
+│       ├── pi3x.py           # Pi3X模型（增强版）
+│       └── layers/
+│           ├── conv_head.py   # 卷积上采样Head（Pi3X）
+│           └── prope.py       # PRoPE位置编码（Pi3X）
+├── pi3_server.py              # Pi3 Flask服务器
+├── pi3_client.py              # Pi3客户端
+├── pi3x_server.py             # Pi3X Flask服务器
+└── pi3x_client.py             # Pi3X客户端
+```
+
+**权重下载**:
+```bash
+mkdir -p checkpoints/pi3x
+cd checkpoints/pi3x
+wget https://huggingface.co/yyfz233/Pi3X/resolve/main/model.safetensors
+```
+
+**资源链接**:
+- [官方仓库](https://github.com/yyfz/Pi3)
+- [Pi3X HuggingFace权重](https://huggingface.co/yyfz233/Pi3X)
+
+---
+
 ### 6. Supervision - 目标检测和标注工具
 
 **功能**: YOLO目标检测和可视化标注工具
@@ -303,7 +345,7 @@ pip install groundingdino_py supervision moondream
 
 创建checkpoints目录：
 ```bash
-mkdir -p checkpoints/{grounding_dino,depth_anything,pi3,sam2}
+mkdir -p checkpoints/{grounding_dino,depth_anything,pi3,pi3x,sam2}
 ```
 ### 2. 下载模型权重
 
@@ -331,10 +373,15 @@ python spagent/external_experts/GroundingDINO/grounding_dino_server.py \
   --checkpoint_path checkpoints/grounding_dino/groundingdino_swinb_cogcoor.pth \
   --port 20022
 
-# 3D重建服务
+# 3D重建服务（Pi3）
 python spagent/external_experts/Pi3/pi3_server.py \
   --checkpoint_path checkpoints/pi3/model.safetensors \
   --port 20030
+
+# 3D重建服务（Pi3X - 增强版，推荐）
+python spagent/external_experts/Pi3/pi3x_server.py \
+  --checkpoint_path checkpoints/pi3x/model.safetensors \
+  --port 20031
 
 # 视觉语言模型服务
 python spagent/external_experts/moondream/md_server.py \

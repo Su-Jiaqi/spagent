@@ -13,11 +13,12 @@ external_experts/
 │   └──depth_anything
 │   └──grounding_dino
 │   └──pi3
+│   └──pi3x
 │   └──sam2
 ├── GroundingDINO/                  # Open-vocabulary object detection
 ├── SAM2/                          # Image and video segmentation
 ├── Depth_AnythingV2/              # Depth estimation
-├── Pi3/                           # 3D reconstruction
+├── Pi3/                           # 3D reconstruction (Pi3 & Pi3X)
 ├── moondream/                     # Vision language model
 └── supervision/                   # YOLO object detection and annotation tools
 ```
@@ -30,7 +31,8 @@ external_experts/
 | **SAM2** | `SegmentationTool` | Image/Video Segmentation | High-precision segmentation tasks, precisely segment objects in images | 20020 | `image_path`, `point_coords`(optional), `point_labels`(optional), `box`(optional) |
 | **GroundingDINO** | `ObjectDetectionTool` | Open-vocabulary Object Detection | Detect arbitrary objects based on text descriptions | 20022 | `image_path`, `text_prompt`, `box_threshold`, `text_threshold` |
 | **Moondream** | `MoondreamTool` | Vision Language Model | Image understanding and Q&A, answer natural language questions based on image content | 20024 | `image_path`, `task`, `object_name` |
-| **Pi3** | `Pi3Tool` | 3D Reconstruction | Generate 3D point clouds and multi-view rendered images from a single image | 20030 | `image_path`, `azimuth_angle`, `elevation_angle` |
+| **Pi3** | `Pi3Tool` | 3D Reconstruction | Generate 3D point clouds and multi-view rendered images from images | 20030 | `image_path`, `azimuth_angle`, `elevation_angle` |
+| **Pi3X** | `Pi3XTool` | 3D Reconstruction (Enhanced) | Upgraded Pi3 with smoother point clouds, metric scale, and optional multimodal conditioning | 20031 | `image_path`, `azimuth_angle`, `elevation_angle` |
 | **Supervision** | `SupervisionTool` | Object Detection Annotation | YOLO models and visualization tools, general object detection and segmentation | - | `image_path`, `task` ("image_det" or "image_seg") |
 | **YOLO-E** | `YOLOETool` | YOLO-E Detection | High-precision detection with custom classes | - | `image_path`, `task`, `class_names` |
 
@@ -244,6 +246,46 @@ wget https://huggingface.co/yyfz233/Pi3/resolve/main/model.safetensors
 
 ---
 
+### 5.1 Pi3X - Enhanced 3D Reconstruction Service
+
+**Function**: Enhanced 3D reconstruction based on Pi3X model (upgraded version of Pi3)
+
+**Features**:
+- Smoother point cloud reconstruction (ConvHead replaces LinearPts3d, eliminates grid artifacts)
+- Approximate metric scale reconstruction
+- Optional multimodal conditioning (camera poses, intrinsics, depth)
+- More reliable continuous confidence scoring
+- Fully compatible API with Pi3 (same input/output format)
+
+**File Structure**:
+```
+Pi3/
+├── pi3/
+│   └── models/
+│       ├── pi3.py            # Original Pi3 model
+│       ├── pi3x.py           # Pi3X model (enhanced)
+│       └── layers/
+│           ├── conv_head.py   # Convolutional upsampling head (Pi3X)
+│           └── prope.py       # PRoPE positional encoding (Pi3X)
+├── pi3_server.py              # Pi3 Flask server
+├── pi3_client.py              # Pi3 client
+├── pi3x_server.py             # Pi3X Flask server
+└── pi3x_client.py             # Pi3X client
+```
+
+**Weight Download**:
+```bash
+mkdir -p checkpoints/pi3x
+cd checkpoints/pi3x
+wget https://huggingface.co/yyfz233/Pi3X/resolve/main/model.safetensors
+```
+
+**Resources**:
+- [Official Repository](https://github.com/yyfz/Pi3)
+- [Pi3X HuggingFace Weights](https://huggingface.co/yyfz233/Pi3X)
+
+---
+
 ### 6. Supervision - Object Detection and Annotation Tools
 
 **Function**: YOLO object detection and visualization annotation tools
@@ -304,7 +346,7 @@ pip install groundingdino_py supervision moondream
 
 Create checkpoints directory:
 ```bash
-mkdir -p checkpoints/{grounding_dino,depth_anything,pi3,sam2}
+mkdir -p checkpoints/{grounding_dino,depth_anything,pi3,pi3x,sam2}
 ```
 
 ### 2. Download Model Weights
@@ -334,10 +376,15 @@ python spagent/external_experts/GroundingDINO/grounding_dino_server.py \
   --checkpoint_path checkpoints/grounding_dino/groundingdino_swinb_cogcoor.pth \
   --port 20022
 
-# 3D reconstruction service
+# 3D reconstruction service (Pi3)
 python spagent/external_experts/Pi3/pi3_server.py \
   --checkpoint_path checkpoints/pi3/model.safetensors \
   --port 20030
+
+# 3D reconstruction service (Pi3X - enhanced, recommended)
+python spagent/external_experts/Pi3/pi3x_server.py \
+  --checkpoint_path checkpoints/pi3x/model.safetensors \
+  --port 20031
 
 # Vision language model service
 python spagent/external_experts/moondream/md_server.py \
