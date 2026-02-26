@@ -340,7 +340,11 @@ class Pi3Tool(Tool):
             
             
             # Check if cached result already exists
-            cached_result = self._check_cache(image_path[0], azimuth_angle, elevation_angle)
+            cached_result = self._check_cache(
+                image_path[0], azimuth_angle, elevation_angle,
+                rotation_reference_camera=rotation_reference_camera,
+                camera_view=camera_view
+            )
             if cached_result:
                 logger.info(f"Using cached result for azimuth={azimuth_angle}°, elevation={elevation_angle}°, "
                            )
@@ -542,10 +546,8 @@ class Pi3Tool(Tool):
                     azimuth = view_data.get("azimuth_angle", 0)
                     elevation = view_data.get("elevation_angle", 0)
                     
-                    # Debug: log view data info
                     # Create filename with scene_id, angles, and optional suffixes
-                    # Using format: pi3_{scene_id}_azim{azimuth}_elev{elevation}[_refcam{N}][_camview].png
-                    img_filename = f"pi3_{scene_id}_azim{azimuth:.1f}_elev{elevation:.1f}.png"
+                    img_filename = f"pi3_{scene_id}_azim{azimuth:.1f}_elev{elevation:.1f}{suffix}.png"
                     img_path = os.path.join(output_dir, img_filename)
                     
                     # Decode and save image
