@@ -10,6 +10,7 @@ from .segmentation_tool import SegmentationTool
 from .detection_tool import ObjectDetectionTool
 from .supervision_tool import SupervisionTool
 from .yoloe_tool import YOLOETool
+from .yolo26_tool import YOLO26Tool
 from .moondream_tool import MoondreamTool
 from .moondream3_tool import Moondream3Tool
 from .pi3_tool import Pi3Tool
@@ -21,6 +22,7 @@ __all__ = [
     'ObjectDetectionTool',
     'SupervisionTool',
     'YOLOETool',
+    'YOLO26Tool',
     'MoondreamTool',
     'Moondream3Tool',
     'Pi3Tool',
