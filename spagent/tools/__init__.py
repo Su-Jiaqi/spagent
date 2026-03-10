@@ -16,6 +16,7 @@ from .moondream3_tool import Moondream3Tool
 from .pi3_tool import Pi3Tool
 from .pi3x_tool import Pi3XTool
 from .depth_anything3_tool import DepthAnything3Tool
+from .orient_anything_tool import OrientAnythingTool
 
 __all__ = [
     'DepthEstimationTool',
@@ -28,5 +29,6 @@ __all__ = [
     'Moondream3Tool',
     'Pi3Tool',
     'Pi3XTool',
-    'DepthAnything3Tool'
+    'DepthAnything3Tool',
+    'OrientAnythingTool'
 ] 

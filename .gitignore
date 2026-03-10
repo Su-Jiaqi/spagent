@@ -20,3 +20,24 @@ test_outputs
 results
 outputs_old
 weights
+
+
+# Orient Anything / Hugging Face cache
+orient_anything_cache/
+models--facebook--dinov2-large/
+.locks/
+
+# Pytest / Python cache
+.pytest_cache/
+__pycache__/
+*.pyc
+
+# Logs
+*.log
+
+# Large model files
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.onnx
