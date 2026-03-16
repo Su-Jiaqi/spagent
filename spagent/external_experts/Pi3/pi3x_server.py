@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 plt.rcParams['figure.max_open_warning'] = 0
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.spatial.transform import Rotation as R
-from pi3.models.pi3 import Pi3
+from pi3.models.pi3x import Pi3X
 from pi3.utils.basic import load_images_as_tensor, write_ply
 from pi3.utils.geometry import depth_edge
 from safetensors.torch import load_file
@@ -71,21 +71,21 @@ def extract_scene_id(image_path: str) -> str:
 
 def load_model(checkpoint_path=None):
     """
-    加载Pi3模型
+    加载Pi3X模型
     
     Args:
         checkpoint_path: 模型权重文件路径或包含权重文件的目录路径
     """
     global model
     try:
-        logger.info("正在加载Pi3模型...")
+        logger.info("正在加载Pi3X模型...")
         
         # 设置设备
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         logger.info(f"使用设备：{device}")
         
         # 创建模型实例
-        model = Pi3().to(device).eval()
+        model = Pi3X().to(device).eval()
         
         # 加载检查点
         if checkpoint_path:
@@ -134,7 +134,7 @@ def load_model(checkpoint_path=None):
             # 加载权重文件
             try:
                 weight = load_file(actual_file_path)
-                model.load_state_dict(weight)
+                model.load_state_dict(weight, strict=False)
                 logger.info("模型权重加载成功")
             except Exception as e:
                 logger.error(f"加载模型权重失败：{e}")
@@ -313,7 +313,7 @@ def test():
         
         with torch.no_grad():
             with torch.amp.autocast('cuda', dtype=dtype):
-                results = model(imgs_tensor[None])
+                results = model(imgs=imgs_tensor[None])
         
         logger.info(f"推理成功")
         return jsonify({
@@ -333,7 +333,7 @@ def test():
 
 @app.route('/infer', methods=['POST'])
 def infer():
-    """Pi3 3D重建推理接口"""
+    """Pi3X 3D重建推理接口"""
     global model
     
     if model is None:
@@ -412,12 +412,12 @@ def infer():
         ]).to(device)
         
         # 运行推理
-        logger.info("正在进行Pi3 3D重建...")
+        logger.info("正在进行Pi3X 3D重建...")
         dtype = torch.bfloat16 if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8 else torch.float16
         
         with torch.no_grad():
             with torch.amp.autocast('cuda', dtype=dtype):
-                results = model(imgs_tensor[None])
+                results = model(imgs=imgs_tensor[None])
         
         logger.info("重建完成！")
         
@@ -460,12 +460,14 @@ def infer():
         ply_path = f"outputs/{ply_filename}"
         os.makedirs("outputs", exist_ok=True)
         
-        ply_b64 = write_ply(
-            points_filtered, 
-            colors_filtered,  # 使用过滤后的颜色数据
+        write_ply(
+            points_filtered,
+            colors_filtered,
             ply_path
         )
-        
+
+        with open(ply_path, 'rb') as f:
+            ply_b64 = base64.b64encode(f.read()).decode('utf-8')
 
         # 提取原始相机位姿信息（未经旋转）
         original_camera_poses = results['camera_poses'][0].cpu().numpy()
@@ -537,7 +539,7 @@ def infer():
             except Exception as e:
                 logger.warning(f"生成多视角图片失败：{e}")
         
-        logger.info("Pi3重建完成")
+        logger.info("Pi3X重建完成")
         return jsonify(response_data)
         
     except Exception as e:
@@ -549,7 +551,7 @@ def _prepare_points_and_cameras(results, masks, imgs_rgb_tensor, points_filtered
     准备点云和相机数据的共同函数
     
     Args:
-        results: Pi3模型的推理结果
+        results: Pi3X模型的推理结果
         masks: 点云掩码
         imgs_rgb_tensor: RGB图像张量
         points_filtered: 可选的预过滤点云（已移除离群点）
@@ -1223,7 +1225,7 @@ def generate_custom_angle_views(results, masks, imgs_rgb_tensor, azimuth_angle, 
     根据自定义角度生成视角图片
     
     Args:
-        results: Pi3模型的推理结果
+        results: Pi3X模型的推理结果
         masks: 点云掩码
         imgs_rgb_tensor: RGB图像张量
         azimuth_angle: 方位角（左右旋转），单位：度
@@ -1299,15 +1301,15 @@ def generate_custom_angle_views(results, masks, imgs_rgb_tensor, azimuth_angle, 
 
 if __name__ == '__main__':
     # 解析命令行参数
-    parser = argparse.ArgumentParser(description='Pi3 3D Reconstruction Server')
-    parser.add_argument('--checkpoint_path', type=str, default='spagent/external_experts/checkpoints/pi3',
-                        help='Path to Pi3 model checkpoint directory or file (default: checkpoints/pi3/)')
-    parser.add_argument('--port', type=int, default=20021,
-                        help='Port to run the server on (default: 20021)')
+    parser = argparse.ArgumentParser(description='Pi3X 3D Reconstruction Server')
+    parser.add_argument('--checkpoint_path', type=str, default='checkpoints/pi3x',
+                        help='Path to Pi3X model checkpoint directory or file (default: checkpoints/pi3x/)')
+    parser.add_argument('--port', type=int, default=20031,
+                        help='Port to run the server on (default: 20031)')
     
     args = parser.parse_args()
     
-    logger.info("正在启动Pi3服务器...")
+    logger.info("正在启动Pi3X服务器...")
     logger.info(f"模型路径: {args.checkpoint_path}")
     logger.info(f"服务端口: {args.port}")
     

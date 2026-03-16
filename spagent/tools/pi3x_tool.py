@@ -1,8 +1,10 @@
 """
-Pi3 3D Reconstruction Tool
+Pi3X 3D Reconstruction Tool
 
-This module contains the Pi3Tool that wraps
-Pi3 3D reconstruction functionality for the SPAgent system.
+This module contains the Pi3XTool that wraps
+Pi3X 3D reconstruction functionality for the SPAgent system.
+Pi3X is an upgraded version of Pi3 with smoother point clouds,
+flexible conditioning, and approximate metric scale reconstruction.
 """
 
 import sys
@@ -60,10 +62,10 @@ def extract_scene_id(image_path: str) -> str:
     return os.path.splitext(os.path.basename(image_path))[0]
 
 
-class Pi3Tool(Tool):
-    """Tool for 3D reconstruction from single image using Pi3"""
+class Pi3XTool(Tool):
+    """Tool for 3D reconstruction from images using Pi3X (upgraded version with smoother point clouds)"""
     
-    def __init__(self, use_mock: bool = True, server_url: str = "http://localhost:20030", mode='inference'):
+    def __init__(self, use_mock: bool = True, server_url: str = "http://localhost:20031", mode='inference'):
         """
         Initialize Pi3 tool
         
@@ -72,7 +74,7 @@ class Pi3Tool(Tool):
             server_url: URL of the Pi3 server
         """
         super().__init__(
-            name="pi3_tool",
+            name="pi3x_tool",
             description=(
                 "This tool is suitable for motion and spatial reasoning tasks that involve camera movement, "
                 "object rotation, or directional motion analysis. It performs 3D reconstruction from images "
@@ -122,12 +124,12 @@ class Pi3Tool(Tool):
         self._init_client()
     
     def _init_client(self):
-        """Initialize the Pi3 client"""
+        """Initialize the Pi3X client"""
         if self.use_mock:
             try:
                 from external_experts.Pi3.mock_pi3_service import MockPi3Service
                 self._client = MockPi3Service()
-                logger.info("Using mock Pi3 service")
+                logger.info("Using mock Pi3X service")
             except ImportError:
                 # Create a simple mock client
                 class SimpleMockPi3:
@@ -214,14 +216,14 @@ class Pi3Tool(Tool):
                         }
                 
                 self._client = SimpleMockPi3()
-                logger.info("Using simple mock Pi3 service")
+                logger.info("Using simple mock Pi3X service")
         else:
             try:
-                from external_experts.Pi3.pi3_client import Pi3Client
-                self._client = Pi3Client(server_url=self.server_url)
-                logger.info(f"Using real Pi3 service at {self.server_url}")
+                from external_experts.Pi3.pi3x_client import Pi3XClient
+                self._client = Pi3XClient(server_url=self.server_url)
+                logger.info(f"Using real Pi3X service at {self.server_url}")
             except ImportError as e:
-                logger.error(f"Failed to import real Pi3 client: {e}")
+                logger.error(f"Failed to import real Pi3X client: {e}")
                 raise
     
     @property
@@ -303,7 +305,7 @@ class Pi3Tool(Tool):
                     "error": "image_path list is required and cannot be empty"
                 }
             
-            logger.info(f"Running Pi3 3D reconstruction on images: {image_path}")
+            logger.info(f"Running Pi3X 3D reconstruction on images: {image_path}")
             
             # Check if all images exist
             for img_path in image_path:
@@ -364,7 +366,7 @@ class Pi3Tool(Tool):
             )
             
             if result and result.get('success'):
-                logger.info("Pi3 3D reconstruction completed successfully")
+                logger.info("Pi3X 3D reconstruction completed successfully")
                 
                 # Extract key information
                 points_count = result.get('points_count', 0)
@@ -390,7 +392,7 @@ class Pi3Tool(Tool):
                     "input_images_count": len(image_path),
                     "output_path": output_path,  # This is what SPAgent looks for
                     "description": (
-                        f"Pi3 tool has completed 3D reconstruction, generating a point cloud visualization "
+                        f"Pi3X tool has completed 3D reconstruction, generating a point cloud visualization "
                         f"with {len(image_path)} input images producing {len(image_path)} camera viewpoints. In the point cloud visualization, "
                         f"camera positions are indicated by cone-shaped markers, with their shooting direction "
                         f"pointing from the base towards the apex. The first input image corresponds to cam1 "
@@ -403,14 +405,14 @@ class Pi3Tool(Tool):
             else:
                 error_msg = result.get('error', 'Unknown error') if result else 'No result returned'
                 logger.info(f"Not found azimuth{azimuth_angle} and elevation{elevation_angle} in {str(image_path)}.")
-                logger.error(f"Pi3 3D reconstruction failed: {error_msg}")
+                logger.error(f"Pi3X 3D reconstruction failed: {error_msg}")
                 return {
                     "success": False,
-                    "error": f"Pi3 3D reconstruction failed: {error_msg}"
+                    "error": f"Pi3X 3D reconstruction failed: {error_msg}"
                 }
                 
         except Exception as e:
-            logger.error(f"Pi3 tool error: {e}")
+            logger.error(f"Pi3X tool error: {e}")
             return {
                 "success": False,
                 "error": str(e)
@@ -448,7 +450,7 @@ class Pi3Tool(Tool):
             if camera_view:
                 suffix += "_camview"
             
-            cache_filename = f"pi3_{scene_id}_azim{azimuth_angle:.1f}_elev{elevation_angle:.1f}{suffix}.png"
+            cache_filename = f"pi3x_{scene_id}_azim{azimuth_angle:.1f}_elev{elevation_angle:.1f}{suffix}.png"
             cache_path = os.path.join(output_dir, cache_filename)
             
             # Check if cache file exists
@@ -488,7 +490,7 @@ class Pi3Tool(Tool):
                 "output_path": cache_path,
                 "cached": True,  # Mark as cached result
                 "description": (
-                    f"Using cached Pi3 visualization from previous reconstruction "
+                    f"Using cached Pi3X visualization from previous reconstruction "
                     f"(azimuth={int(azimuth_angle)}°, elevation={int(elevation_angle)}°). "
                     f"The cached result shows the reconstructed 3D scene from the requested viewing angle."
                 )
@@ -547,7 +549,7 @@ class Pi3Tool(Tool):
                     elevation = view_data.get("elevation_angle", 0)
                     
                     # Create filename with scene_id, angles, and optional suffixes
-                    img_filename = f"pi3_{scene_id}_azim{azimuth:.1f}_elev{elevation:.1f}{suffix}.png"
+                    img_filename = f"pi3x_{scene_id}_azim{azimuth:.1f}_elev{elevation:.1f}{suffix}.png"
                     img_path = os.path.join(output_dir, img_filename)
                     
                     # Decode and save image
@@ -556,7 +558,7 @@ class Pi3Tool(Tool):
                         with open(img_path, 'wb') as f:
                             f.write(img_data)
                         saved_images.append(img_path)
-                        logger.info(f"Saved Pi3 generated image: {img_path}")
+                        logger.info(f"Saved Pi3X generated image: {img_path}")
                     
                 except Exception as e:
                     logger.error(f"Failed to save camera view {i}: {e}")
@@ -570,5 +572,5 @@ class Pi3Tool(Tool):
                 return None
                 
         except Exception as e:
-            logger.error(f"Error saving Pi3 generated images: {e}")
+            logger.error(f"Error saving Pi3X generated images: {e}")
             return None

@@ -15,7 +15,11 @@ from pathlib import Path
 
 from .tool import Tool, ToolRegistry
 from .model import Model
-from .prompts import create_system_prompt, create_follow_up_prompt, create_user_prompt, create_fallback_prompt
+from .prompts import (
+    create_system_prompt, create_follow_up_prompt, create_user_prompt, create_fallback_prompt,
+    SPATIAL_3D_CONTINUATION_HINT, GENERAL_VISION_CONTINUATION_HINT,
+)
+import json as _json
 from .data_collector import DataCollector
 
 logger = logging.getLogger(__name__)
@@ -30,25 +34,50 @@ class SPAgent:
     """
     
     def __init__(
-        self, 
+        self,
         model: Model,
         tools: Optional[List[Tool]] = None,
         max_workers: int = 4,
-        data_collector: Optional[DataCollector] = None
+        data_collector: Optional[DataCollector] = None,
+        system_prompt: Optional[str] = None,
+        continuation_hint: Optional[str] = None,
     ):
         """
         Initialize SPAgent
-        
+
         Args:
             model: VLLM model wrapper to use
             tools: List of external expert tools (optional)
             max_workers: Maximum number of parallel tool executions
             data_collector: Optional DataCollector for training data collection
+            system_prompt: Optional system prompt template string.
+                If provided it overrides the default 3D-spatial prompt built by
+                ``create_system_prompt``.  The string may contain a
+                ``{tools_json}`` placeholder which will be replaced with the
+                JSON-serialised tool schemas at inference time.  If no
+                placeholder is present the tools block is appended automatically.
+                Use the ``SPATIAL_3D_SYSTEM_PROMPT`` or
+                ``GENERAL_VISION_SYSTEM_PROMPT`` constants from
+                ``spagent.core.prompts`` as starting points.
+            continuation_hint: Optional next-step instructions injected into
+                every multi-step continuation prompt (iteration 2+).
+                If None, auto-selects: GENERAL_VISION_CONTINUATION_HINT when
+                system_prompt is set, SPATIAL_3D_CONTINUATION_HINT otherwise.
+                Use constants from ``spagent.core.prompts``.
         """
         self.model = model
         self.tool_registry = ToolRegistry()
         self.max_workers = max_workers
         self.data_collector = data_collector
+        self.system_prompt_template = system_prompt
+        # Explicit hint takes priority; fall back to auto-detection from system_prompt.
+        if continuation_hint is not None:
+            self.continuation_hint = continuation_hint
+        else:
+            self.continuation_hint = (
+                GENERAL_VISION_CONTINUATION_HINT if system_prompt is not None
+                else SPATIAL_3D_CONTINUATION_HINT
+            )
         
         # Register provided tools
         if tools:
@@ -104,6 +133,7 @@ class SPAgent:
         video_path: Optional[str] = None,
         pi3_num_frames: int = 7,
         use_baseline_comparison: bool = False,
+        video_num_frames: int = 4,
         **model_kwargs
     ) -> Dict[str, Any]:
         """
@@ -117,6 +147,8 @@ class SPAgent:
             pi3_num_frames: Number of frames to uniformly sample for pi3 tool (default 10)
             use_baseline_comparison: If True, run a naive baseline (no tools) in parallel
                                     and synthesize final answer from both results (default: False)
+            video_num_frames: Number of frames to uniformly sample from a tool-generated video
+                              and pass back to the model (default: 4)
             **model_kwargs: Additional arguments for model inference
             
         Returns:
@@ -148,7 +180,19 @@ class SPAgent:
         
         # Create system prompt with available tools
         tool_schemas = self.tool_registry.get_function_schemas()
-        system_prompt = create_system_prompt(tool_schemas)
+        if self.system_prompt_template is not None:
+            tools_json = _json.dumps(tool_schemas, indent=2)
+            if "{tools_json}" in self.system_prompt_template:
+                system_prompt = self.system_prompt_template.replace("{tools_json}", tools_json)
+            else:
+                # No placeholder — append the tools block automatically
+                tools_block = (
+                    f"\n# Tools\nYou have access to the following tools:\n"
+                    f"<tools>\n{tools_json}\n</tools>\n"
+                )
+                system_prompt = self.system_prompt_template + tools_block
+        else:
+            system_prompt = create_system_prompt(tool_schemas)
         # system_prompt += '\nThis time, you need to call the function anyway in <tool_call></tool_call> format.' # Debug Only!
         user_prompt = create_user_prompt(question, image_paths, tool_schemas)
         
@@ -253,8 +297,15 @@ class SPAgent:
                     all_successful_tools.append(f"{tool_name}_iter{iteration}")
                     # Collect additional images
                     if 'output_path' in result and result['output_path'] is not None:
-                        if Path(result['output_path']).exists():
-                            iteration_additional_images.append(result['output_path'])
+                        out_path = result['output_path']
+                        if Path(out_path).exists():
+                            if Path(out_path).suffix.lower() == '.mp4':
+                                # Generated video: extract frames uniformly and use them
+                                frame_paths = self._extract_video_frames(out_path, video_num_frames)
+                                logger.info(f"Extracted {len(frame_paths)} frames from generated video: {out_path}")
+                                iteration_additional_images.extend(frame_paths)
+                            else:
+                                iteration_additional_images.append(out_path)
                     if 'vis_path' in result and result['vis_path'] is not None:
                         if Path(result['vis_path']).exists():
                             iteration_additional_images.append(result['vis_path'])
@@ -288,12 +339,13 @@ class SPAgent:
                     tool_description = last_result.get('description')
             
             follow_up_prompt = create_follow_up_prompt(
-                question, 
-                initial_response, 
+                question,
+                initial_response,
                 all_tool_results,
                 image_paths,
                 all_additional_images,
-                tool_description
+                tool_description,
+                continuation_hint=self.continuation_hint,
             )
             
             valid_additional_images = self._sort_additional_images_by_input_order(image_paths, all_additional_images)
@@ -560,7 +612,7 @@ class SPAgent:
                         "success": False,
                         "error": str(e)
                     }
-        
+
         return tool_results
     
     def _safe_tool_call(self, tool: Tool, arguments: Dict[str, Any]) -> Dict[str, Any]:
@@ -748,49 +800,58 @@ Generated Images Available for Analysis:
 
 === Next Steps ===
 
-You have {remaining} more iteration(s) available. You can:
+You have {remaining} more iteration(s) available.
 
-1. **Continue investigating** - Call tools with DIFFERENT parameters:
-   - **IMPORTANT**: Your original input images are already at (azimuth=0°, elevation=0°). DO NOT call Pi3 tools with (0°, 0°) again!
-   - For Pi3 tools: Try NEW viewing angles to understand the 3D structure better
-   - Recommended NEW angles (NOT 0°,0°!):
-     * Left: (-45°, 0°) or (-90°, 0°)
-     * Right: (45°, 0°) or (90°, 0°)
-     * Top: (0°, 45°) or (0°, 60°)
-     * Bottom: (0°, -45°)
-     * Back: (180°, 0°) or (±135°, 0°)
-     * Diagonal: (45°, 30°) or (-45°, 30°)
-   - Each NEW angle reveals different aspects of the 3D structure
-   
-   **Advanced Pi3 Parameters**:
-   - **rotation_reference_camera** (integer, 1-based): When you have multiple input images, try DIFFERENT camera positions as rotation centers
-     * Default is 1 (first camera), Set to 2, 3, etc. to rotate around different camera positions
-     * Example: rotation_reference_camera=2 rotates around the second camera's viewpoint
-     * Useful for analyzing different parts of the scene from various perspectives
-   
-   - **camera_view** (boolean): Control the visualization perspective
-     * False (default): Global bird's-eye view showing the entire scene
-     * True: First-person camera view - see the scene from the selected camera's perspective (as if standing at that camera)
-     * Combine with rotation_reference_camera to experience different camera viewpoints
-     * Example: camera_view=True with rotation_reference_camera=2 shows first-person view from camera 2
-     * Useful for understanding what each camera can see and spatial relationships
-
-2. **Provide final answer** - If you have sufficient information from current viewpoints:
-   - Output your comprehensive analysis in <think></think> tags
-   - Reference the specific viewpoints that helped you understand the structure
-
-Instructions:
-- Think: Do you need to see the object from another NEW angle (NOT 0°,0°!) to answer the question better?
-- If YES: Use <tool_call></tool_call> to request a DIFFERENT viewing angle (avoid 0°,0° as you already have it!)
-- If NO: output your thinking process in <think></think> and your final answer in <answer></answer>. Only put Options in <answer></answer> tags, do not put any other text.
-
-Note that in 3D reconstruction, the camera numbering corresponds directly to the image numbering — cam1 represents the first frame.
-You can examine the image to understand what is around cam1.
-The 3D reconstruction provides relative positional information, so you should reason interactively and complementarily between the 2D image and the 3D reconstruction to form a complete understanding.
+{self.continuation_hint}
 
 Please continue:"""
         
         return prompt
+    def _extract_video_frames(self, video_path: str, num_frames: int = 4) -> List[str]:
+        """Uniformly sample frames from a video file and save them as JPEG images.
+
+        Args:
+            video_path: Path to the input video file.
+            num_frames: Number of frames to extract uniformly.
+
+        Returns:
+            List of paths to the extracted JPEG frame images.
+        """
+        try:
+            import cv2
+        except ImportError:
+            logger.error("opencv-python is required for video frame extraction. pip install opencv-python")
+            return []
+
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            logger.error(f"Cannot open video file: {video_path}")
+            return []
+
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        if total_frames <= 0:
+            cap.release()
+            logger.error(f"Video has no frames: {video_path}")
+            return []
+
+        frame_interval = max(total_frames / num_frames, 1)
+        temp_dir = Path("temp_veo_frames")
+        temp_dir.mkdir(exist_ok=True)
+        video_stem = Path(video_path).stem
+
+        frame_paths: List[str] = []
+        for i in range(num_frames):
+            frame_idx = int(i * frame_interval)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+            ret, frame = cap.read()
+            if ret:
+                frame_path = temp_dir / f"{video_stem}_frame{i:02d}.jpg"
+                cv2.imwrite(str(frame_path), frame)
+                frame_paths.append(str(frame_path))
+
+        cap.release()
+        return frame_paths
+
     def _extract_frames_for_pi3(self, video_path: str, num_frames: int = 10) -> List[str]:
         """
         Extract frames from video for pi3 tool by uniformly sampling

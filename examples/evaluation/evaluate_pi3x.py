@@ -14,6 +14,7 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.append(str(project_root))
 
 from spagent import SPAgent
+from spagent.core import DataCollector  # NEW: Import DataCollector
 from spagent.models import GPTModel, QwenModel
 from spagent.tools import (
     DepthEstimationTool,
@@ -22,7 +23,8 @@ from spagent.tools import (
     SupervisionTool,
     YOLOETool,
     MoondreamTool,
-    Pi3Tool
+    Pi3Tool,
+    Pi3XTool,
 )
 from spagent.utils.utils import (
     load_json_data, 
@@ -33,19 +35,77 @@ from spagent.utils.utils import (
     save_result_to_csv
 )
 from spagent_evaluation import evaluate_tool_config, evaluate_single_sample
+from datetime import datetime  # NEW: For timestamp
+from collections import Counter  # NEW: For angle distribution statistics
+
 # Define server URLs
 TOOL_SERVERS = {
-    "depth": "http://0.0.0.0:20019",  # depth-anything-v2
-    "segmentation": "http://0.0.0.0:20020",  # sam
-    "detection": "http://10.7.8.94:20022",  # dino
-    "pi3": "http://0.0.0.0:20030"  # pi3
+    "pi3x": "http://localhost:20031",  # pi3x
 }
 
 TOOL_CONFIGS = {
-    "baseline_no_tools": [
-        # Empty tool list - pure LLM baseline
-    ],
+    "pi3x": [
+        Pi3XTool(use_mock=False, server_url=TOOL_SERVERS["pi3x"], mode='inference'),
+    ]
 }
+
+def print_pi3_statistics(results: Dict[str, Any]):
+    """
+    Print Pi3 tool parameter statistics including angles, rotation_reference_camera, and camera_view
+    
+    Args:
+        results: Evaluation results dictionary
+    """
+    if "pi3_statistics" not in results:
+        print("\nNo Pi3 tool calls detected in this evaluation.")
+        return
+    
+    pi3_stats = results["pi3_statistics"]
+    
+    print(f"\n{'='*80}")
+    print("Pi3 Tool Parameter Statistics")
+    print(f"{'='*80}")
+    print(f"Total Pi3 calls:              {pi3_stats['total_pi3_calls']}")
+    print(f"Unique angle combinations:    {pi3_stats['unique_angle_combinations']}")
+    
+    # Angle distribution
+    print(f"\n{'Top 5 Most Used Angle Combinations:':<50}")
+    print(f"{'Angle (azimuth, elevation)':<35} {'Count':<10} {'Percentage':<15}")
+    print("-" * 80)
+    
+    for item in pi3_stats['top_5_angle_combinations']:
+        angle = item['angle']
+        count = item['count']
+        percentage = item['percentage']
+        print(f"{angle:<35} {count:<10} {percentage:<15}")
+    
+    # rotation_reference_camera usage
+    print(f"\n{'Rotation Reference Camera Usage:':<50}")
+    print(f"{'Camera':<20} {'Count':<10} {'Percentage':<15}")
+    print("-" * 80)
+    
+    for camera, count in pi3_stats['rotation_reference_camera_usage'].items():
+        percentage = pi3_stats['rotation_reference_camera_percentage'][camera]
+        print(f"{camera:<20} {count:<10} {percentage:<15}")
+    
+    # camera_view usage
+    print(f"\n{'Camera View Mode Usage:':<50}")
+    print(f"{'Mode':<20} {'Count':<10} {'Percentage':<15}")
+    print("-" * 80)
+    
+    for mode, count in pi3_stats['camera_view_usage'].items():
+        percentage = pi3_stats['camera_view_percentage'][mode]
+        display_mode = "Enabled (True)" if "true" in mode else "Disabled (False)"
+        print(f"{display_mode:<20} {count:<10} {percentage:<15}")
+    
+    print(f"\n{'Full Angle Distribution:':<50}")
+    print(f"{'Angle (azimuth, elevation)':<35} {'Count':<10}")
+    print("-" * 80)
+    
+    for angle, count in pi3_stats['angle_distribution'].items():
+        print(f"{angle:<35} {count:<10}")
+    
+    print(f"{'='*80}\n")
 
 def main():
     """Main function"""
@@ -72,6 +132,12 @@ def main():
                         help='Random seed for reproducibility (default: 42)')
     parser.add_argument('--top_p', type=float, default=1.0,
                         help='Nucleus sampling probability mass (default: 1.0)')
+    
+    # NEW: Data collection arguments
+    parser.add_argument('--enable_data_collection', action='store_true',
+                        help='Enable training data collection')
+    parser.add_argument('--data_output_dir', type=str, default=None,
+                        help='Directory for training data (auto-generated if not specified)')
 
     args = parser.parse_args()
     
@@ -87,6 +153,22 @@ def main():
     # Run evaluation for each tool configuration
     all_results = {}
     for config_name, tools in TOOL_CONFIGS.items():
+        # NEW: Create DataCollector if enabled
+        data_collector = None
+        if args.enable_data_collection:
+            if args.data_output_dir is None:
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                data_output_dir = f"training_data/{config_name}_{args.model.replace('-', '_')}_{timestamp}"
+            else:
+                data_output_dir = args.data_output_dir
+            
+            data_collector = DataCollector(
+                output_dir=data_output_dir,
+                save_images=True,
+                auto_save=True
+            )
+            print(f"✓ Data collection enabled: {data_output_dir}")
+        
         results = evaluate_tool_config(
             config_name=config_name,
             tools=tools,
@@ -96,6 +178,7 @@ def main():
             max_samples=args.max_samples,
             max_workers=args.max_workers,
             max_iterations=args.max_iterations,
+            data_collector=data_collector,
             temperature=args.temperature,
             seed=args.seed,
             top_p=args.top_p,
@@ -105,6 +188,9 @@ def main():
         # Print individual config results
         print(f"\nResults for {config_name}:")
         print_evaluation_results(results)
+        
+        # Print Pi3 parameter statistics if available
+        print_pi3_statistics(results)
     
     # Save all results to file
     output_file = f"spagent_evaluation_results_{args.model.replace('-', '_')}_{args.max_iterations}_{args.task}.json"

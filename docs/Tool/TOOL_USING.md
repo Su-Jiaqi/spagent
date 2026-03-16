@@ -2,7 +2,7 @@
 
 > **中文版本**: [中文文档](TOOL_USING_ZH.md) | **English Version**: This document
 
-The External Experts module contains specialized models for spatial intelligence tasks, including depth estimation, object detection, segmentation, 3D reconstruction, and more. All tools adopt a server/client architecture, supporting independent deployment and invocation.
+The External Experts module contains specialized models for spatial intelligence tasks, including depth estimation, object detection, segmentation, 3D reconstruction, video generation, and more. All tools adopt a server/client architecture or direct API call pattern, supporting independent deployment and invocation.
 
 ## 📁 Module Structure
 
@@ -13,35 +13,42 @@ external_experts/
 │   └──depth_anything
 │   └──grounding_dino
 │   └──pi3
+│   └──pi3x
 │   └──sam2
 │   └──vggt
 ├── GroundingDINO/                  # Open-vocabulary object detection
 ├── SAM2/                          # Image and video segmentation
 ├── Depth_AnythingV2/              # Depth estimation
-├── Pi3/                           # 3D reconstruction
+├── Pi3/                           # 3D reconstruction (Pi3 & Pi3X)
 ├── VGGT/                          # Multi-view 3D reconstruction & camera pose estimation
 ├── mapanything/                   # Dense 3D reconstruction via depth estimation
 ├── moondream/                     # Vision language model
+├── Veo/                           # Google Veo video generation (API-based)
+├── Sora/                          # OpenAI Sora video generation (API-based)
 └── supervision/                   # YOLO object detection and annotation tools
 ```
 
 ## 🛠️ Tool Overview
 
-| Tool Name | Tool Class | Function | Main Purpose | Default Port | Main Parameters |
-|---------|------------|----------|--------------|--------------|----------------|
-| **Depth AnythingV2** | `DepthEstimationTool` | Depth Estimation | Monocular depth estimation, analyze 3D depth relationships in images | 20019 | `image_path` |
-| **SAM2** | `SegmentationTool` | Image/Video Segmentation | High-precision segmentation tasks, precisely segment objects in images | 20020 | `image_path`, `point_coords`(optional), `point_labels`(optional), `box`(optional) |
-| **GroundingDINO** | `ObjectDetectionTool` | Open-vocabulary Object Detection | Detect arbitrary objects based on text descriptions | 20022 | `image_path`, `text_prompt`, `box_threshold`, `text_threshold` |
-| **Moondream** | `MoondreamTool` | Vision Language Model | Image understanding and Q&A, answer natural language questions based on image content | 20024 | `image_path`, `task`, `object_name` |
-| **Pi3** | `Pi3Tool` | 3D Reconstruction | Generate 3D point clouds and multi-view rendered images from a single image | 20030 | `image_path`, `azimuth_angle`, `elevation_angle` |
+| Tool Name | Tool Class | Function | Main Purpose | Deployment | Main Parameters |
+|---------|------------|----------|--------------|------------|----------------|
+| **Depth AnythingV2** | `DepthEstimationTool` | Depth Estimation | Monocular depth estimation, analyze 3D depth relationships in images | Server (port 20019) | `image_path` |
+| **SAM2** | `SegmentationTool` | Image/Video Segmentation | High-precision segmentation tasks, precisely segment objects in images | Server (port 20020) | `image_path`, `point_coords`(optional), `point_labels`(optional), `box`(optional) |
+| **GroundingDINO** | `ObjectDetectionTool` | Open-vocabulary Object Detection | Detect arbitrary objects based on text descriptions | Server (port 20022) | `image_path`, `text_prompt`, `box_threshold`, `text_threshold` |
+| **Moondream** | `MoondreamTool` | Vision Language Model | Image understanding and Q&A, answer natural language questions based on image content | Server (port 20024) | `image_path`, `task`, `object_name` |
+| **Pi3** | `Pi3Tool` | 3D Reconstruction | Generate 3D point clouds and multi-view rendered images from images | Server (port 20030) | `image_path`, `azimuth_angle`, `elevation_angle` |
+| **Pi3X** | `Pi3XTool` | 3D Reconstruction (Enhanced) | Upgraded Pi3 with smoother point clouds, metric scale, and optional multimodal conditioning | Server (port 20031) | `image_path`, `azimuth_angle`, `elevation_angle` |
 | **VGGT** | `VGGTTool` | Multi-view 3D Reconstruction & Camera Pose Estimation | Reconstruct 3D point clouds and estimate camera poses from multiple images or video frames | 20032 | `image_paths`, `azimuth_angle`, `elevation_angle`, `rotation_reference_camera`, `camera_view` |
 | **MapAnything** | `MapAnythingTool` | Dense 3D Reconstruction via Depth Estimation | Reconstruct dense 3D point clouds from multiple images using depth maps and camera poses | 20033 | `image_paths`, `azimuth_angle`, `elevation_angle`, `conf_percentile`, `apply_mask` |
-| **Supervision** | `SupervisionTool` | Object Detection Annotation | YOLO models and visualization tools, general object detection and segmentation | - | `image_path`, `task` ("image_det" or "image_seg") |
-| **YOLO-E** | `YOLOETool` | YOLO-E Detection | High-precision detection with custom classes | - | `image_path`, `task`, `class_names` |
+| **Supervision** | `SupervisionTool` | Object Detection Annotation | YOLO models and visualization tools, general object detection and segmentation | Local | `image_path`, `task` ("image_det" or "image_seg") |
+| **YOLO-E** | `YOLOETool` | YOLO-E Detection | High-precision detection with custom classes | Local | `image_path`, `task`, `class_names` |
+| **Veo** | `VeoTool` | Video Generation | Text-to-video and image-to-video via Google Veo (Gemini API) | API (no server) | `prompt`, `image_path`(optional), `duration`, `aspect_ratio` |
+| **Sora** | `SoraTool` | Video Generation | Text-to-video and image-to-video via OpenAI Sora | API (no server) | `prompt`, `image_path`(optional), `duration`, `resolution`, `aspect_ratio` |
 
 **Usage Examples**:
 - For detailed usage examples, please refer to: [Advanced Examples](../Examples/ADVANCED_EXAMPLES.md)
 - For quick start guide, please refer to: [Quick Start Guide](../../readme.md#-quick-start)
+- For adding custom tools: [How to Add New Tools](../ADDING_NEW_TOOLS.md)
 
 ---
 
@@ -175,6 +182,27 @@ wget https://github.com/IDEA-Research/GroundingDINO/releases/download/v0.1.0-alp
 - [Official Repository](https://github.com/IDEA-Research/GroundingDINO)
 - [Paper](https://arxiv.org/abs/2303.05499)
 
+**Known Issues**:
+
+> **`transformers` Version Incompatibility**
+>
+> **Error:** `'BertModel' object has no attribute 'get_head_mask'`
+>
+> GroundingDINO requires `transformers 4.x`. If `transformers>=5.0` is installed, the BERT text encoder fails to load. Fix by downgrading:
+> ```bash
+> pip install "transformers==4.26.0"
+> ```
+
+> **SOCKS Proxy Not Supported**
+>
+> **Error:** `Unknown scheme for proxy URL URL('socks://127.0.0.1:xxxx/')`
+>
+> If a SOCKS proxy is set in your environment (e.g. `ALL_PROXY=socks://...`), the `bert-base-uncased` model download will fail. Unset proxy variables before starting the server:
+> ```bash
+> unset ALL_PROXY HTTPS_PROXY HTTP_PROXY all_proxy https_proxy http_proxy
+> ```
+> Or install SOCKS support: `pip install httpx[socks]`
+
 ---
 
 ### 4. Moondream - Vision Language Model
@@ -246,6 +274,46 @@ python spagent/utils/ply_to_html_viewer.py xxx.ply --output xxx.html --max_point
 cd checkpoints/pi3
 wget https://huggingface.co/yyfz233/Pi3/resolve/main/model.safetensors
 ```
+
+---
+
+### 5.1 Pi3X - Enhanced 3D Reconstruction Service
+
+**Function**: Enhanced 3D reconstruction based on Pi3X model (upgraded version of Pi3)
+
+**Features**:
+- Smoother point cloud reconstruction (ConvHead replaces LinearPts3d, eliminates grid artifacts)
+- Approximate metric scale reconstruction
+- Optional multimodal conditioning (camera poses, intrinsics, depth)
+- More reliable continuous confidence scoring
+- Fully compatible API with Pi3 (same input/output format)
+
+**File Structure**:
+```
+Pi3/
+├── pi3/
+│   └── models/
+│       ├── pi3.py            # Original Pi3 model
+│       ├── pi3x.py           # Pi3X model (enhanced)
+│       └── layers/
+│           ├── conv_head.py   # Convolutional upsampling head (Pi3X)
+│           └── prope.py       # PRoPE positional encoding (Pi3X)
+├── pi3_server.py              # Pi3 Flask server
+├── pi3_client.py              # Pi3 client
+├── pi3x_server.py             # Pi3X Flask server
+└── pi3x_client.py             # Pi3X client
+```
+
+**Weight Download**:
+```bash
+mkdir -p checkpoints/pi3x
+cd checkpoints/pi3x
+wget https://huggingface.co/yyfz233/Pi3X/resolve/main/model.safetensors
+```
+
+**Resources**:
+- [Official Repository](https://github.com/yyfz/Pi3)
+- [Pi3X HuggingFace Weights](https://huggingface.co/yyfz233/Pi3X)
 
 ---
 
@@ -366,6 +434,196 @@ python download_weights.py
 
 ---
 
+### 9. Veo - Video Generation (Google)
+
+**Function**: Text-to-video and image-to-video generation via Google's Veo model through the Gemini API. No local server required — calls the cloud API directly.
+
+**Features**:
+- Text-to-video (t2v) and image-to-video (i2v) generation
+- Returns a `.mp4` file saved locally under `outputs/`
+- Mock mode available for offline testing (no API key needed)
+
+**File Structure**:
+```
+Veo/
+├── __init__.py
+├── veo_client.py          # Real Gemini API client
+└── mock_veo_service.py    # Mock service for testing
+```
+
+**Parameters**:
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `prompt` | string | ✅ | — | Text description of the video to generate |
+| `image_path` | string | ❌ | None | Reference image path for image-to-video |
+| `duration` | integer | ❌ | 8 | Duration in seconds (5 or 8) |
+| `aspect_ratio` | string | ❌ | `"16:9"` | `"16:9"` or `"9:16"` |
+
+**API Key Setup**:
+```bash
+export GOOGLE_API_KEY="your_google_api_key"
+# or
+export GCP_API_KEY="your_gcp_api_key"
+```
+
+**Tool Test**:
+```bash
+# Text-to-video (no reference image)
+python test/test_tool.py --tool veo \
+    --image dummy \
+    --prompt "A golden retriever running on a beach at sunset" \
+    --duration 8
+
+# Image-to-video (with reference image)
+python test/test_tool.py --tool veo \
+    --image assets/dog.jpeg \
+    --prompt "The dog starts running across the field" \
+    --duration 8 \
+    --aspect_ratio 16:9
+
+# Mock mode — no API key required
+python test/test_tool.py --tool veo \
+    --image dummy \
+    --prompt "test video" \
+    --use_mock
+```
+
+**Evaluation**:
+```bash
+# Prepare a JSONL dataset (one sample per line):
+# {"id":"1","prompt":"A sunset over the ocean","image":[],"task":"t2v","duration":8}
+# {"id":"2","prompt":"The dog starts running","image":["assets/dog.jpeg"],"task":"i2v"}
+
+# Run evaluation with real Veo API
+python examples/evaluation/evaluate_veo.py \
+    --data_path dataset/veo_eval_data.jsonl \
+    --model gpt-4o \
+    --video_num_frames 4
+
+# Run evaluation with mock service
+python examples/evaluation/evaluate_veo.py \
+    --data_path dataset/veo_eval_data.jsonl \
+    --use_mock \
+    --max_samples 5
+
+# Run on existing dataset (conversations format)
+python examples/evaluation/evaluate_veo.py \
+    --data_path dataset/tmp.jsonl \
+    --image_base_path dataset \
+    --model gpt-4o
+```
+
+**Key CLI Options**:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--data_path` | `dataset/veo_eval_data.jsonl` | Path to JSONL evaluation dataset |
+| `--image_base_path` | `.` | Base directory for resolving image paths |
+| `--model` | `gpt-4o` | LLM orchestrator model |
+| `--max_samples` | all | Limit number of samples |
+| `--video_num_frames` | `4` | Frames extracted from generated video to feed back to model |
+| `--use_mock` | false | Use mock Veo service (no API key needed) |
+| `--max_iterations` | `3` | Max tool-call iterations per sample |
+
+---
+
+### 10. Sora - Video Generation (OpenAI)
+
+**Function**: Text-to-video and image-to-video generation via OpenAI's Sora model. No local server required — calls the cloud API directly.
+
+**Features**:
+- Text-to-video (t2v) and image-to-video (i2v) generation
+- Resolution control (480p / 720p / 1080p)
+- Supports 1:1 square aspect ratio in addition to 16:9 and 9:16
+- Returns a `.mp4` file saved locally under `outputs/`
+- Mock mode available for offline testing (no API key needed)
+
+**File Structure**:
+```
+Sora/
+├── __init__.py
+├── sora_client.py          # Real OpenAI API client
+└── mock_sora_service.py    # Mock service for testing
+```
+
+**Parameters**:
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `prompt` | string | ✅ | — | Text description of the video to generate |
+| `image_path` | string | ❌ | None | Reference image path for image-to-video |
+| `duration` | integer | ❌ | 10 | Duration in seconds (5–20) |
+| `resolution` | string | ❌ | `"1080p"` | `"480p"`, `"720p"`, or `"1080p"` |
+| `aspect_ratio` | string | ❌ | `"16:9"` | `"16:9"`, `"9:16"`, or `"1:1"` |
+
+**API Key Setup**:
+```bash
+export OPENAI_API_KEY="your_openai_api_key"
+```
+
+**Tool Test**:
+```bash
+# Text-to-video
+python test/test_tool.py --tool sora \
+    --image dummy \
+    --prompt "A cat sitting on a windowsill watching rain fall outside" \
+    --duration 10 \
+    --resolution 1080p
+
+# Image-to-video
+python test/test_tool.py --tool sora \
+    --image assets/dog.jpeg \
+    --prompt "The dog starts running" \
+    --duration 10 \
+    --aspect_ratio 16:9
+
+# Mock mode — no API key required
+python test/test_tool.py --tool sora \
+    --image dummy \
+    --prompt "test video" \
+    --use_mock
+```
+
+**Evaluation**:
+```bash
+# Prepare a JSONL dataset (one sample per line):
+# {"id":"1","prompt":"A cat playing with yarn","image":[],"task":"t2v","duration":10,"resolution":"1080p"}
+# {"id":"2","prompt":"The dog runs","image":["assets/dog.jpeg"],"task":"i2v","resolution":"720p"}
+
+# Run evaluation with real Sora API
+python examples/evaluation/evaluate_sora.py \
+    --data_path dataset/sora_eval_data.jsonl \
+    --model gpt-4o \
+    --video_num_frames 4
+
+# Run evaluation with mock service
+python examples/evaluation/evaluate_sora.py \
+    --data_path dataset/sora_eval_data.jsonl \
+    --use_mock \
+    --max_samples 5
+
+# Run on existing dataset (conversations format)
+python examples/evaluation/evaluate_sora.py \
+    --data_path dataset/tmp.jsonl \
+    --image_base_path dataset \
+    --model gpt-4o
+```
+
+**Key CLI Options**:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--data_path` | `dataset/sora_eval_data.jsonl` | Path to JSONL evaluation dataset |
+| `--image_base_path` | `.` | Base directory for resolving image paths |
+| `--model` | `gpt-4o` | LLM orchestrator model |
+| `--max_samples` | all | Limit number of samples |
+| `--video_num_frames` | `4` | Frames extracted from generated video to feed back to model |
+| `--use_mock` | false | Use mock Sora service (no API key needed) |
+| `--max_iterations` | `3` | Max tool-call iterations per sample |
+
+---
+
 ## 🚀 Quick Start
 
 ### 1. Environment Setup
@@ -380,7 +638,7 @@ pip install groundingdino_py supervision moondream
 
 Create checkpoints directory:
 ```bash
-mkdir -p checkpoints/{grounding_dino,depth_anything,pi3,sam2}
+mkdir -p checkpoints/{grounding_dino,depth_anything,pi3,pi3x,sam2}
 ```
 
 ### 2. Download Model Weights
@@ -410,11 +668,16 @@ python spagent/external_experts/GroundingDINO/grounding_dino_server.py \
   --checkpoint_path checkpoints/grounding_dino/groundingdino_swinb_cogcoor.pth \
   --port 20022
 
-# 3D reconstruction service
+# 3D reconstruction service (Pi3)
 python spagent/external_experts/Pi3/pi3_server.py \
   --checkpoint_path checkpoints/pi3/model.safetensors \
   --port 20030
 
+# 3D reconstruction service (Pi3X - enhanced, recommended)
+python spagent/external_experts/Pi3/pi3x_server.py \
+  --checkpoint_path checkpoints/pi3x/model.safetensors \
+  --port 20031
+  
 # VGGT multi-view 3D reconstruction service 
 python spagent/external_experts/VGGT/vggt_server.py \
   --checkpoint_path checkpoints/vggt \

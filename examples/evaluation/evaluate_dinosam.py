@@ -14,15 +14,12 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.append(str(project_root))
 
 from spagent import SPAgent
+from spagent.core import DataCollector
+from spagent.core.prompts import GENERAL_VISION_SYSTEM_PROMPT, GENERAL_VISION_CONTINUATION_HINT
 from spagent.models import GPTModel, QwenModel
 from spagent.tools import (
-    DepthEstimationTool,
     SegmentationTool,
     ObjectDetectionTool,
-    SupervisionTool,
-    YOLOETool,
-    MoondreamTool,
-    Pi3Tool
 )
 from spagent.utils.utils import (
     load_json_data, 
@@ -33,19 +30,21 @@ from spagent.utils.utils import (
     save_result_to_csv
 )
 from spagent_evaluation import evaluate_tool_config, evaluate_single_sample
+from datetime import datetime
+
 # Define server URLs
 TOOL_SERVERS = {
-    "depth": "http://0.0.0.0:20019",  # depth-anything-v2
-    "segmentation": "http://0.0.0.0:20020",  # sam
-    "detection": "http://10.7.8.94:20022",  # dino
-    "pi3": "http://0.0.0.0:20030"  # pi3
+    "sam2": "http://localhost:20020",
+    "grounding_dino": "http://localhost:20022",
 }
 
 TOOL_CONFIGS = {
-    "baseline_no_tools": [
-        # Empty tool list - pure LLM baseline
-    ],
+    "dinosam": [
+        ObjectDetectionTool(use_mock=False, server_url=TOOL_SERVERS["grounding_dino"]),
+        SegmentationTool(use_mock=False, server_url=TOOL_SERVERS["sam2"]),
+    ]
 }
+
 
 def main():
     """Main function"""
@@ -73,6 +72,12 @@ def main():
     parser.add_argument('--top_p', type=float, default=1.0,
                         help='Nucleus sampling probability mass (default: 1.0)')
 
+    # Data collection arguments
+    parser.add_argument('--enable_data_collection', action='store_true',
+                        help='Enable training data collection')
+    parser.add_argument('--data_output_dir', type=str, default=None,
+                        help='Directory for training data (auto-generated if not specified)')
+
     args = parser.parse_args()
     
     # Check if files exist
@@ -87,6 +92,22 @@ def main():
     # Run evaluation for each tool configuration
     all_results = {}
     for config_name, tools in TOOL_CONFIGS.items():
+        # NEW: Create DataCollector if enabled
+        data_collector = None
+        if args.enable_data_collection:
+            if args.data_output_dir is None:
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                data_output_dir = f"training_data/{config_name}_{args.model.replace('-', '_')}_{timestamp}"
+            else:
+                data_output_dir = args.data_output_dir
+            
+            data_collector = DataCollector(
+                output_dir=data_output_dir,
+                save_images=True,
+                auto_save=True
+            )
+            print(f"✓ Data collection enabled: {data_output_dir}")
+        
         results = evaluate_tool_config(
             config_name=config_name,
             tools=tools,
@@ -96,6 +117,9 @@ def main():
             max_samples=args.max_samples,
             max_workers=args.max_workers,
             max_iterations=args.max_iterations,
+            data_collector=data_collector,
+            system_prompt=GENERAL_VISION_SYSTEM_PROMPT,
+            continuation_hint=GENERAL_VISION_CONTINUATION_HINT,
             temperature=args.temperature,
             seed=args.seed,
             top_p=args.top_p,
@@ -105,6 +129,7 @@ def main():
         # Print individual config results
         print(f"\nResults for {config_name}:")
         print_evaluation_results(results)
+        
     
     # Save all results to file
     output_file = f"spagent_evaluation_results_{args.model.replace('-', '_')}_{args.max_iterations}_{args.task}.json"
