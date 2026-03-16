@@ -52,32 +52,31 @@ class OrientAnythingClient:
     ):
         self.repo_root = Path(repo_root).resolve()
         self.device = device if torch.cuda.is_available() else "cpu"
-        self.cache_dir = cache_dir or "./spagent/orient_anything_cache"
+        if cache_dir is not None:
+            self.cache_dir = Path(cache_dir).resolve()
+        else:
+            xdg = os.getenv("XDG_CACHE_HOME")
+            base = Path(xdg) if xdg else (Path.home() / ".cache")
+            self.cache_dir = (base / "spagent" / "orient_anything_cache").resolve()
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         if not self.repo_root.exists():
             raise FileNotFoundError(f"Orient-Anything repo not found: {self.repo_root}")
 
         if str(self.repo_root) not in sys.path:
             sys.path.insert(0, str(self.repo_root))
+        from paths import DINO_SMALL, DINO_BASE, DINO_LARGE
+        from vision_tower import DINOv2_MLP
+        from inference import get_3angle, get_3angle_infer_aug
+        from utils import background_preprocess
 
-        old_cwd = os.getcwd()
-        try:
-            os.chdir(str(self.repo_root))
-
-            from paths import DINO_SMALL, DINO_BASE, DINO_LARGE
-            from vision_tower import DINOv2_MLP
-            from inference import get_3angle, get_3angle_infer_aug
-            from utils import background_preprocess
-
-            self.DINO_SMALL = DINO_SMALL
-            self.DINO_BASE = DINO_BASE
-            self.DINO_LARGE = DINO_LARGE
-            self.DINOv2_MLP = DINOv2_MLP
-            self.get_3angle = get_3angle
-            self.get_3angle_infer_aug = get_3angle_infer_aug
-            self.background_preprocess = background_preprocess
-        finally:
-            os.chdir(old_cwd)
+        self.DINO_SMALL = DINO_SMALL
+        self.DINO_BASE = DINO_BASE
+        self.DINO_LARGE = DINO_LARGE
+        self.DINOv2_MLP = DINOv2_MLP
+        self.get_3angle = get_3angle
+        self.get_3angle_infer_aug = get_3angle_infer_aug
+        self.background_preprocess = background_preprocess
 
         self._models: Dict[str, Any] = {}
         self._preprocessors: Dict[str, Any] = {}
@@ -113,7 +112,7 @@ class OrientAnythingClient:
                 repo_id="Viglong/Orient-Anything",
                 filename=cfg["filename"],
                 repo_type="model",
-                cache_dir=self.cache_dir,
+                cache_dir=str(self.cache_dir),
             )
 
         model = self.DINOv2_MLP(
@@ -130,7 +129,7 @@ class OrientAnythingClient:
 
         processor = AutoImageProcessor.from_pretrained(
             self._get_processor_name(model_size),
-            cache_dir=self.cache_dir,
+            cache_dir=str(self.cache_dir),
             local_files_only=True,
         )
 
@@ -168,32 +167,26 @@ class OrientAnythingClient:
             model, processor = self._load_model(model_size)
             origin_image = Image.open(img_path).convert("RGB")
 
-            old_cwd = os.getcwd()
-            try:
-                os.chdir(str(self.repo_root))
-
-                if use_tta:
-                    rm_bkg_img = self.background_preprocess(origin_image, True)
-                    angles = self.get_3angle_infer_aug(
-                        origin_image,
-                        rm_bkg_img,
-                        model,
-                        processor,
-                        self.device,
-                    )
-                else:
-                    input_img = self.background_preprocess(
-                        origin_image,
-                        remove_background,
-                    )
-                    angles = self.get_3angle(
-                        input_img,
-                        model,
-                        processor,
-                        self.device,
-                    )
-            finally:
-                os.chdir(old_cwd)
+            if use_tta:
+                rm_bkg_img = self.background_preprocess(origin_image, True)
+                angles = self.get_3angle_infer_aug(
+                    origin_image,
+                    rm_bkg_img,
+                    model,
+                    processor,
+                    self.device,
+                )
+            else:
+                input_img = self.background_preprocess(
+                    origin_image,
+                    remove_background,
+                )
+                angles = self.get_3angle(
+                    input_img,
+                    model,
+                    processor,
+                    self.device,
+                )
 
             azimuth = float(angles[0])
             polar = float(angles[1])

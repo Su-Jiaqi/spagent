@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
 
+import pytest
+
 from spagent.tools import OrientAnythingTool
 
 
@@ -13,8 +15,7 @@ def test_orient_anything_tool():
     python -m pytest test/orient_anything/test_orient_anything_tool.py -s
     """
     if os.getenv("RUN_REAL_ORIENT_ANYTHING_TEST") != "1":
-        print("Skipping real Orient Anything test. Set RUN_REAL_ORIENT_ANYTHING_TEST=1 to enable.")
-        return
+        pytest.skip("Skipping real Orient Anything test. Set RUN_REAL_ORIENT_ANYTHING_TEST=1 to enable.")
 
     image_path = os.getenv(
         "ORIENT_ANYTHING_TEST_IMAGE",

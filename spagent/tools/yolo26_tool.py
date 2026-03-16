@@ -131,12 +131,15 @@ class YOLO26Tool(Tool):
 
             if r.boxes is not None:
                 boxes_xyxy = r.boxes.xyxy.cpu().tolist()
-                scores = r.boxes.conf.cpu().tolist() if r.boxes.conf is not None else []
+                if r.boxes.conf is not None:
+                    scores = r.boxes.conf.cpu().tolist()
+                else:
+                    scores = [0.0] * len(boxes_xyxy)
                 cls_ids = r.boxes.cls.cpu().tolist() if r.boxes.cls is not None else []
 
                 for i, box in enumerate(boxes_xyxy):
                     cls_id = int(cls_ids[i]) if i < len(cls_ids) else -1
-                    score = float(scores[i]) if i < len(scores) else None
+                    score = float(scores[i]) if i < len(scores) else 0.0
                     label = names.get(cls_id, str(cls_id)) if isinstance(names, dict) else str(cls_id)
 
                     detections.append({

@@ -13,9 +13,9 @@ from transformers import AutoImageProcessor
 logger = logging.getLogger(__name__)
 
 
-class OrientAnythingClient:
+class OrientAnythingLocalClient:
     """
-    Local Python client for Orient Anything.
+    Alternative local client for Orient Anything (no os.chdir; importlib-based).
 
     This client:
     1. Imports the official Orient-Anything repo from a local clone.

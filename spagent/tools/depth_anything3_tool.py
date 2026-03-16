@@ -1,9 +1,10 @@
 """
-Depth Anything 3 Tool
+Depth Anything 3 Tool — SPAgent 中单目深度估计的入口（在此注册与调用）。
 
-SPAgent tool for monocular depth estimation. Uses the server/client pattern:
-- Real: external_experts.depth_anything3.depth_anything3_client.DepthAnything3Client
-- Mock: external_experts.depth_anything3.mock_depth_anything3.MockDepthAnything3
+与 Pi3X / Depth V2 一致：采用 Server/Client 架构，模型在独立进程中运行。
+- Server: external_experts.depth_anything3.depth_anything3_server（需单独启动）
+- Real client: external_experts.depth_anything3.depth_anything3_client（HTTP）
+- Mock: external_experts.depth_anything3.mock_depth_anything3
 """
 
 import sys
@@ -22,25 +23,22 @@ logger = logging.getLogger(__name__)
 
 
 class DepthAnything3Tool(Tool):
-    """Tool for monocular depth estimation using Depth Anything V3."""
+    """Tool for monocular depth estimation using Depth Anything V3 (server-based, same pattern as Pi3X)."""
 
     def __init__(
         self,
         use_mock: bool = True,
-        device: str = "cuda",
-        encoder: str = "vitl",
-        checkpoint_path: Optional[str] = None,
+        server_url: str = "http://localhost:20032",
         save_dir: Optional[str] = None,
-        input_size: int = 518,
+        request_timeout: int = 120,
     ):
         """
         Args:
-            use_mock: If True, use mock client (no real model).
-            device: Device for inference, e.g. "cuda" or "cpu".
-            encoder: Depth Anything V3 encoder variant: "vits", "vitb", or "vitl".
-            checkpoint_path: Path to model checkpoint (.pth or model dir). Required for real inference.
+            use_mock: If True, use mock client (no server required).
+            server_url: URL of the Depth Anything 3 server (when use_mock=False). Start server with
+                depth_anything3_server.py --checkpoint_path <path_or_hf_id> --port 20032.
             save_dir: Directory to save outputs. If None, save next to input image.
-            input_size: Input size for the model (used in real inference).
+            request_timeout: Timeout in seconds for HTTP requests to the server.
         """
         super().__init__(
             name="depth_anything3_tool",
@@ -51,34 +49,25 @@ class DepthAnything3Tool(Tool):
             ),
         )
         self.use_mock = use_mock
-        self.device = device
-        self.encoder = encoder
-        self.checkpoint_path = checkpoint_path
+        self.server_url = server_url
         self.save_dir = Path(save_dir) if save_dir else None
-        self.input_size = input_size
+        self.request_timeout = request_timeout
         self._client = None
         self._init_client()
 
     def _init_client(self) -> None:
-        """Initialize mock or real client from external_experts (per ADDING_NEW_TOOLS.md)."""
+        """Initialize mock or HTTP client (per ADDING_NEW_TOOLS.md / Pi3X pattern)."""
         if self.use_mock:
             from external_experts.depth_anything3.mock_depth_anything3 import MockDepthAnything3
             self._client = MockDepthAnything3()
             logger.info("DepthAnything3Tool initialized in mock mode.")
         else:
             from external_experts.depth_anything3.depth_anything3_client import DepthAnything3Client
-            if not self.checkpoint_path:
-                raise ValueError("checkpoint_path is required when use_mock=False.")
             self._client = DepthAnything3Client(
-                checkpoint_path=self.checkpoint_path,
-                device=self.device,
-                encoder=self.encoder,
-                input_size=self.input_size,
+                server_url=self.server_url,
+                request_timeout=self.request_timeout,
             )
-            logger.info(
-                "DepthAnything3Tool real client loaded: encoder=%s, checkpoint=%s",
-                self.encoder, self.checkpoint_path,
-            )
+            logger.info("DepthAnything3Tool real client (server): %s", self.server_url)
 
     @property
     def parameters(self) -> Dict[str, Any]:

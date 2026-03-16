@@ -54,18 +54,23 @@ This tool runs inside the SPAgent project.
 
 The tool imports modules directly from the official repository, so the repository must exist locally.
 
-Example:
+Example (clone outside repo; use a path that fits your setup, e.g. sibling of spagent):
 
 ```
-git clone https://github.com/Viglong/Orient-Anything.git /data/sjq/Orient-Anything
+# From spagent project root:
+cd ..
+git clone https://github.com/Viglong/Orient-Anything.git Orient-Anything
 ```
+
+Or with an absolute path: `git clone https://github.com/Viglong/Orient-Anything.git /path/to/Orient-Anything`
 
 ### 3. Install Python dependencies
 
 Install the Orient-Anything dependencies inside the same Python environment used by SPAgent.
 
 ```
-pip install -r /data/sjq/Orient-Anything/requirements.txt
+# If you cloned to ../Orient-Anything from spagent root:
+pip install -r ../Orient-Anything/requirements.txt
 ```
 
 The runtime also relies on common packages such as:
@@ -77,11 +82,13 @@ The runtime also relies on common packages such as:
 
 ### 4. Orient-Anything checkpoint
 
-For the `large` model, the following file must exist:
+For the `large` model, the following file must exist under your Orient-Anything clone:
 
 ```
-/data/sjq/Orient-Anything/croplargeEX2/dino_weight.pt
+<Orient-Anything>/croplargeEX2/dino_weight.pt
 ```
+
+e.g. `../Orient-Anything/croplargeEX2/dino_weight.pt` if clone is sibling of spagent.
 
 Other optional model sizes:
 

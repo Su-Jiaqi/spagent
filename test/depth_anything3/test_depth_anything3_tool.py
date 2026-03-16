@@ -1,10 +1,9 @@
 """
-Depth Anything 3 Tool 测试。
+Depth Anything 3 Tool 的测试（本目录仅做测试，不提供可被 agent 调用的入口）。
 
-- test_depth_anything3_tool_mock_on_bus_png: 使用 use_mock=True，不调用真实模型，
-  只生成竖直渐变假深度图，用于 CI/快速验证，无真实 API 调用。
-- test_depth_anything3_tool_real: 使用真实 Depth Anything V3 模型（需安装 depth_anything_v3、
-  下载 .pth checkpoint 并设置 DEPTH_ANYTHING3_CHECKPOINT 或传入 checkpoint_path）。
+Tool ：Server/Client 架构，真实推理需先启动 depth_anything3_server。
+- test_depth_anything3_tool_mock_on_bus_png: mock 模式，用于 CI/快速验证。
+- test_depth_anything3_tool_real: 真实模型，需先启动 server，可选设置 DEPTH_ANYTHING3_SERVER_URL（默认 http://localhost:20032）。
 """
 from pathlib import Path
 import os
@@ -49,26 +48,22 @@ def test_depth_anything3_tool_mock_on_bus_png():
 
 def test_depth_anything3_tool_real():
     """
-    真实模型测试。需满足其一：
-    1. 环境变量 DEPTH_ANYTHING3_CHECKPOINT 为 HuggingFace 模型 id，如 depth-anything/DA3MONO-LARGE
-    2. 或指向本地 .pth 文件，或本目录下有 .pth
-    若无则 skip。
+    真实模型测试（Server/Client 模式）。需先启动 depth_anything3_server，
+    可选设置 DEPTH_ANYTHING3_SERVER_URL（默认 http://localhost:20032）。若 server 不可达则 skip。
     """
     import pytest
+    import requests
 
-    ckpt = os.environ.get("DEPTH_ANYTHING3_CHECKPOINT")
-    if not ckpt:
-        cand = list(Path(__file__).parent.glob("*.pth"))
-        ckpt = str(cand[0]) if cand else None
-    # HF id 如 "depth-anything/DA3MONO-LARGE" 不需要本地存在
-    if not ckpt:
-        pytest.skip(
-            "Real test skipped: set DEPTH_ANYTHING3_CHECKPOINT (e.g. depth-anything/DA3MONO-LARGE) or put a .pth in test/depth_anything3/"
-        )
-    if "/" in ckpt and not ckpt.startswith("/") and not Path(ckpt).exists():
-        pass  # 视为 HF id，不要求本地存在
-    elif not Path(ckpt).exists():
-        pytest.skip(f"DEPTH_ANYTHING3_CHECKPOINT path not found: {ckpt}")
+    server_url = os.environ.get("DEPTH_ANYTHING3_SERVER_URL", "http://localhost:20032").rstrip("/")
+    try:
+        r = requests.get(f"{server_url}/health", timeout=3)
+        if r.status_code != 200:
+            pytest.skip(f"Depth Anything 3 server returned {r.status_code}; start server first.")
+        data = r.json()
+        if not data.get("model_loaded"):
+            pytest.skip("Depth Anything 3 server not ready (model not loaded).")
+    except requests.RequestException as e:
+        pytest.skip(f"Depth Anything 3 server not running at {server_url}: {e}. Start with: python -m spagent.external_experts.depth_anything3.depth_anything3_server --checkpoint_path depth-anything/DA3MONO-LARGE --port 20032")
 
     image_path = Path("assets/example.png")
     output_dir = Path("test/depth_anything3/outputs")
@@ -76,9 +71,7 @@ def test_depth_anything3_tool_real():
 
     tool = DepthAnything3Tool(
         use_mock=False,
-        checkpoint_path=ckpt,
-        encoder="vitl",
-        device="cuda",
+        server_url=server_url,
         save_dir=str(output_dir),
     )
 
@@ -98,18 +91,15 @@ def test_depth_anything3_tool_real():
 if __name__ == "__main__":
     import sys
 
-    # 默认跑 mock；加 --real 则尝试跑真实模型（需 checkpoint）
     if "--real" in sys.argv:
-        ckpt = os.environ.get("DEPTH_ANYTHING3_CHECKPOINT")
-        if not ckpt:
-            cand = list(Path(__file__).parent.glob("*.pth"))
-            ckpt = str(cand[0]) if cand else None
-        is_hf_id = ckpt and "/" in ckpt and not ckpt.startswith("/") and not Path(ckpt).exists()
-        if not ckpt or (not is_hf_id and not Path(ckpt).exists()):
-            print("Real test skipped: set DEPTH_ANYTHING3_CHECKPOINT=e.g. depth-anything/DA3MONO-LARGE or put a .pth in test/depth_anything3/")
-            sys.exit(0)
-        r = test_depth_anything3_tool_real()
-        print("Real model test passed. Result:", r)
+        try:
+            r = test_depth_anything3_tool_real()
+            print("Real model test passed. Result:", r)
+        except Exception as e:
+            if "skip" in type(e).__name__.lower() or "skip" in str(e).lower():
+                print("Skipped:", e)
+            else:
+                raise
     else:
         test_depth_anything3_tool_mock_on_bus_png()
-        print("Mock test passed (no real API/model called — output is fake vertical gradient).")
+        print("Mock test passed (no server required).")

@@ -1,8 +1,11 @@
 """
 Diagnose Moondream3 real API calls: check environment, image, service and print missing items.
-Run from test/moondream3:
-  python test_real_api.py
-  python test_real_api.py --image "your_image_path" --question "question"
+
+Usage (run from project root or test/moondream3):
+  python test/moondream3/test_real_api.py
+
+The script reads example_input.json in test/moondream3 to obtain image_path and question.
+No CLI arguments for image/question; edit example_input.json or set env vars if needed.
 """
 import json
 import sys

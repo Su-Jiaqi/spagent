@@ -22,6 +22,8 @@ import tempfile
 import argparse
 from pathlib import Path
 
+import pytest
+
 # Add project root to path
 project_root = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -161,20 +163,21 @@ def test_registration_with_agent():
         assert "moondream3_tool" in names, f"list_tools() should include 'moondream3_tool', got {names}"
         if not _json_mode():
             print("[PASS] Registration: add_tool and list_tools OK")
+    except ImportError as e:
+        pytest.skip(f"Registration test (SPAgent/GPTModel not available: {e})")
     except Exception as e:
         if _json_mode():
             raise _SkipTest(str(e))
-        print(f"[SKIP] Registration test (SPAgent/GPTModel not available: {e})")
+        raise
 
 
-def test_with_real_image(image_path: str, use_mock: bool = True, server_url: str = "http://localhost:20025", request_timeout: int = 300):
-    """Optional: run VQA with a real image path (mock or server)."""
+def run_with_real_image(image_path: str, use_mock: bool = True, server_url: str = "http://localhost:20025", request_timeout: int = 300):
+    """Helper: run VQA with a real image path (mock or server). Not a pytest test (has params)."""
     from spagent.tools import Moondream3Tool
 
     path = Path(image_path)
     if not path.exists():
-        print(f"[SKIP] Image not found: {image_path}")
-        return
+        pytest.skip(f"Image not found: {image_path}")
     tool = Moondream3Tool(use_mock=use_mock, server_url=server_url, request_timeout=request_timeout)
     out = tool.call(image_path=image_path, question="What is in this image?")
     if not _json_mode():
@@ -276,10 +279,10 @@ def main():
     tool_call_result = None
     if args.image:
         try:
-            test_with_real_image(args.image, use_mock=use_mock, server_url=server_url, request_timeout=request_timeout)
-            results.append({"name": "test_with_real_image", "status": "pass"})
+            run_with_real_image(args.image, use_mock=use_mock, server_url=server_url, request_timeout=request_timeout)
+            results.append({"name": "run_with_real_image", "status": "pass"})
         except Exception as e:
-            results.append({"name": "test_with_real_image", "status": "fail", "error": str(e)})
+            results.append({"name": "run_with_real_image", "status": "fail", "error": str(e)})
     else:
         tool_call_result = run_tool_with_example_input(use_mock=use_mock, server_url=server_url, request_timeout=request_timeout)
 
