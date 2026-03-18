@@ -1,9 +1,3 @@
-"""
-Depth Anything 3 HTTP client (per ADDING_NEW_TOOLS.md / Pi3X pattern).
-
-Talks to depth_anything3_server; does not load the model in-process.
-"""
-
 import base64
 import io
 import logging
