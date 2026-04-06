@@ -21,7 +21,7 @@ class YOLO26Tool(Tool):
 
     def __init__(
         self,
-        model_path: str = "yolo26n.pt",
+        model_path: str = "checkpoints/yolo26/yolo26n.pt",
         device: str = "cpu",
         conf: float = 0.25,
         iou: float = 0.45,

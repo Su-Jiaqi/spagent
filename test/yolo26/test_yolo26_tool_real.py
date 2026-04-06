@@ -28,7 +28,7 @@ def test_yolo26_tool_real_detection():
     repo_root = _find_repo_root()
     sys.path.insert(0, str(repo_root))
 
-    image_path = repo_root / "test" / "yolo26" / "assets" / "bus.png"
+    image_path = repo_root / "assets" / "example.png"
     output_dir = repo_root / "test" / "yolo26" / "outputs" / "yolo26"
 
     default_model_path = repo_root / "weights" / "yolo26n.pt"
