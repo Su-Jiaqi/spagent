@@ -2,6 +2,18 @@
 Orient Anything V2 HTTP Client
 
 Communicates with the Orient Anything V2 Flask server on port 20034 (default).
+
+Output fields (all integer degrees):
+  azimuth        — 0-360°      absolute azimuth of the reference object
+  elevation      — -90..90°    absolute elevation
+  rotation       — -180..180°  in-plane rotation
+  symmetry_alpha — 0/1/2/4     rotational symmetry order
+                   (0=none/uncertain, 1=bilateral, 2=2-fold, 4=4-fold)
+
+When a second image is provided the response additionally contains:
+  rel_azimuth    — relative azimuth  of target w.r.t. reference
+  rel_elevation  — relative elevation
+  rel_rotation   — relative rotation
 """
 
 from __future__ import annotations
@@ -26,30 +38,36 @@ class OrientAnythingV2Client:
     def infer(
         self,
         image_path: str,
-        object_category: str,
-        task: str = "orientation",
         image_path2: Optional[str] = None,
+        remove_background: bool = False,
+        object_category: str = "object",   # ignored by V2 server, kept for compat
+        task: str = "orientation",          # ignored by V2 server, kept for compat
     ) -> dict:
         """Send an inference request to the Orient Anything V2 server.
 
+        The V2 server determines single- vs two-image inference from whether
+        ``image_path2`` is supplied; ``task`` and ``object_category`` are
+        accepted for API compatibility but are not forwarded.
+
         Args:
-            image_path: Path to the input image.
-            object_category: Semantic category of the target object.
-            task: One of 'orientation', 'symmetry', 'relative_rotation'.
-            image_path2: Path to second image (for relative_rotation).
+            image_path: Path to the reference image.
+            image_path2: Path to a second image (enables relative rotation output).
+            remove_background: Ask the server to remove background before inference.
+            object_category: Ignored — the V2 model is category-agnostic.
+            task: Ignored — kept so callers that pass task= still work.
 
         Returns:
-            Dict with task-specific result keys.
+            Dict with keys: azimuth, elevation, rotation, symmetry_alpha,
+            and optionally rel_azimuth, rel_elevation, rel_rotation.
         """
-        payload = {
+        payload: dict = {
             "image": self._encode_image(image_path),
-            "object_category": object_category,
-            "task": task,
+            "remove_background": remove_background,
         }
         if image_path2 is not None:
             payload["image2"] = self._encode_image(image_path2)
 
-        logger.info(f"Sending {task} request to {self.server_url}/infer")
+        logger.info("Sending infer request to %s/infer", self.server_url)
         resp = requests.post(
             f"{self.server_url}/infer",
             json=payload,
@@ -67,7 +85,7 @@ class OrientAnythingV2Client:
             return False
 
     def test_infer(self) -> dict:
-        """Quick test via the /test endpoint."""
+        """Quick connectivity test via the /test endpoint."""
         try:
             r = requests.get(f"{self.server_url}/test", timeout=10.0)
             return r.json()
@@ -76,6 +94,5 @@ class OrientAnythingV2Client:
 
     @staticmethod
     def _encode_image(image_path: str) -> str:
-        """Read image file and return base64-encoded string."""
         data = Path(image_path).read_bytes()
         return base64.b64encode(data).decode("utf-8")

@@ -35,12 +35,12 @@ class OrientAnythingV2Tool(Tool):
             name="orient_anything_v2_tool",
             description=(
                 "Estimates the 3D orientation of objects in images using Orient Anything V2 "
-                "(NeurIPS 2025 Spotlight). Supports three modes: "
-                "(1) 'orientation' - returns yaw/pitch/roll angles in degrees for a specified "
-                "object category; "
-                "(2) 'symmetry' - classifies the symmetry axis of the object; "
-                "(3) 'relative_rotation' - computes the relative rotation matrix between two "
-                "images of the same object type. "
+                "Given a single image, returns azimuth (0-360°), elevation (-90~90°), "
+                "in-plane rotation (-180~180°), and symmetry_alpha (0/1/2/4 indicating "
+                "rotational symmetry order). "
+                "Given two images of the same object from different viewpoints, also returns "
+                "rel_azimuth, rel_elevation, rel_rotation — the relative pose of the second "
+                "image with respect to the first. "
                 "Useful for robotic grasping, AR/VR scene understanding, and spatial reasoning."
             ),
         )
@@ -81,10 +81,11 @@ class OrientAnythingV2Tool(Tool):
                     "type": "string",
                     "enum": ["orientation", "symmetry", "relative_rotation"],
                     "description": (
-                        "'orientation': return yaw/pitch/roll of the object's front face. "
-                        "'symmetry': classify symmetry axis (none/bilateral/rotational). "
-                        "'relative_rotation': estimate rotation between two views "
-                        "(requires image_path2)."
+                        "'orientation': return azimuth/elevation/rotation of the object "
+                        "and its symmetry_alpha. "
+                        "'symmetry': same as orientation — symmetry_alpha is always returned. "
+                        "'relative_rotation': estimate relative pose between two views "
+                        "(requires image_path2); also returns the absolute pose of the first."
                     ),
                     "default": "orientation",
                 },
